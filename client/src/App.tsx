@@ -9,6 +9,7 @@ import { assets } from "./assets/assets";
 import Loading from "./pages/Loading";
 import { useAppContext } from "./context/AppContext";
 import Login from "./pages/Login";
+import { Toaster } from "react-hot-toast";
 
 function App() {
   const [isMenuOpen, setisMenuOpen] = useState(false);
@@ -22,6 +23,7 @@ function App() {
 
   return (
     <>
+      <Toaster />
       {!isMenuOpen && (
         <img
           src={assets.menu_icon}

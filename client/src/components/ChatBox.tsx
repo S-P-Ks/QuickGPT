@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAppContext } from "../context/AppContext";
 import { assets, type Messages } from "../assets/assets";
 import Message from "./Message";
+import toast from "react-hot-toast";
 
 const ChatBox = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { selectedChat, chats, theme } = useAppContext();
+  const { selectedChat, theme, user, token, axios, setuser } = useAppContext();
   const [messages, setmessages] = useState<Messages[]>([]);
   const [loading, setloading] = useState(true);
   const [prompt, setprompt] = useState("");
@@ -13,7 +14,54 @@ const ChatBox = () => {
   const [isPublished, setisPublished] = useState(false);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+    try {
+      e.preventDefault();
+      if (!user) return toast("Login to send message");
+      setloading(true);
+      const promptCopy = prompt;
+      setprompt("");
+      setmessages((prev) => [
+        ...prev,
+        {
+          role: "user",
+          content: prompt,
+          timestamp: Date.now(),
+          isImage: false,
+          isPublished: false,
+        },
+      ]);
+
+      const { data } = await axios.post(
+        `/api/message/${mode}`,
+        {
+          chatId: selectedChat?._id,
+          prompt,
+          isPublished,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (data.success) {
+        setmessages((prev) => [...prev, data.reply]);
+        if (mode === "image") {
+          // @ts-ignore
+          setuser((prev) => ({ ...prev, credits: prev?.credits - 2 }));
+        } else {
+          // @ts-ignore
+          setuser((prev) => ({ ...prev, credits: prev?.credits - 1 }));
+        }
+      } else {
+        toast.error(data.message);
+        setprompt(promptCopy);
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setprompt("");
+      setloading(false);
+    }
   };
 
   useEffect(() => {

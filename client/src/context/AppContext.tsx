@@ -6,12 +6,11 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  dummyUserData,
-  dummyChats,
-  type UserData,
-  type Chat,
-} from "../assets/assets";
+import { type UserData, type Chat } from "../assets/assets";
+import axios, { type AxiosInstance } from "axios";
+import toast from "react-hot-toast";
+
+axios.defaults.baseURL = import.meta.env.VITE_SERVER_URL;
 
 interface AppContextType {
   navigate: ReturnType<typeof useNavigate>;
@@ -24,6 +23,12 @@ interface AppContextType {
   setselectedChat: React.Dispatch<React.SetStateAction<Chat | null>>;
   theme: "light" | "dark";
   settheme: React.Dispatch<React.SetStateAction<"light" | "dark">>;
+  loadingUser: boolean | null;
+  fetchUserChats: () => Promise<void>;
+  token: string;
+  settoken: React.Dispatch<React.SetStateAction<string>>;
+  axios: AxiosInstance;
+  createNewChat: () => Promise<string | undefined>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -36,14 +41,66 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   const [theme, settheme] = useState<"light" | "dark">(
     localStorage.getItem("theme") === "dark" ? "dark" : "light"
   );
+  const [token, settoken] = useState(localStorage.getItem("token") || "");
+  const [loadingUser, setloadingUser] = useState<boolean | null>(true);
 
   const fetchUser = async () => {
-    setuser(dummyUserData);
+    try {
+      const { data } = await axios.get("api/user/data", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (data.success) {
+        setuser(data.user);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setloadingUser(false);
+    }
+  };
+
+  const createNewChat = async () => {
+    try {
+      if (!user) {
+        return toast("Login to create new user");
+      }
+
+      navigate("/");
+      await axios.get("/api/chat/create", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      await fetchUserChats();
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
   };
 
   const fetchUserChats = async () => {
-    setchats(dummyChats);
-    setselectedChat(null);
+    try {
+      const { data } = await axios.get("/api/chat/get", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (data.success) {
+        setchats(data.chats);
+        if (data.chats.length == 0) {
+          await createNewChat();
+          return fetchUserChats();
+        } else {
+          setselectedChat(data.chats[0]);
+        }
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {}
   };
 
   useEffect(() => {
@@ -65,8 +122,14 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   useEffect(() => {
+    if (token) {
+      fetchUser();
+    } else {
+      setuser(null);
+      setloadingUser(null);
+    }
     fetchUser();
-  }, []);
+  }, [token]);
 
   const value: AppContextType = {
     navigate,
@@ -79,6 +142,12 @@ export const AppContextProvider = ({ children }: { children: ReactNode }) => {
     setselectedChat,
     theme,
     settheme,
+    loadingUser,
+    fetchUserChats,
+    token,
+    axios,
+    settoken,
+    createNewChat,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
